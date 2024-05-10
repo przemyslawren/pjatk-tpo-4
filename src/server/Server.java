@@ -7,11 +7,9 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import util.CommandType;
@@ -19,9 +17,9 @@ import util.CommandType;
 public class Server {
 	private Selector selector;
 	private ServerSocketChannel serverSocketChannel;
-	private List<String> topics;
-	private Map<String, Set<SocketChannel>> topicSubscribers;
-	private Map<SocketChannel, Set<String>> clientSubscriptions;
+	private Set<String> topics;
+	private Map<String, Set<SocketChannel>> subscribersByTopic;
+	private Map<SocketChannel, Set<String>> topicsSubscribedByClient;
 
 	public Server(int port) throws IOException {
 		this.selector = Selector.open();
@@ -29,9 +27,9 @@ public class Server {
 		this.serverSocketChannel.configureBlocking(false);
 		this.serverSocketChannel.socket().bind(new InetSocketAddress(port));
 		this.serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
-		this.topics = new ArrayList<>();
-		this.topicSubscribers = new HashMap<>();
-		this.clientSubscriptions = new HashMap<>();
+		this.topics = new HashSet<>();
+		this.subscribersByTopic = new HashMap<>();
+		this.topicsSubscribedByClient = new HashMap<>();
 	}
 
 
@@ -67,6 +65,9 @@ public class Server {
 						handleRead(key);
 					}
 				}
+				System.out.println(topics);
+				System.out.println(subscribersByTopic);
+				System.out.println(topicsSubscribedByClient);
 			}
 		} catch (IOException e) {
 			System.err.println("Server error: " + e.getMessage());
@@ -79,7 +80,7 @@ public class Server {
 		if (clientChannel != null) {
 			clientChannel.configureBlocking(false);
 			clientChannel.register(selector, SelectionKey.OP_READ);
-			clientSubscriptions.put(clientChannel, new HashSet<>());
+			topicsSubscribedByClient.put(clientChannel, new HashSet<>());
 			System.out.println("Accepted connection from " + clientChannel.getRemoteAddress());
 		}
 	}
@@ -89,7 +90,7 @@ public class Server {
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		int read = clientChannel.read(buffer);
 		if (read == -1) {
-			clientSubscriptions.remove(clientChannel);
+			topicsSubscribedByClient.remove(clientChannel);
 			clientChannel.close();
 		} else {
 			buffer.flip();
@@ -101,16 +102,17 @@ public class Server {
 
 	private void processCommand(SocketChannel clientChannel, String request) throws IOException {
 
-		String[] parts = request.split(" ", 2);
+		String[] parts = request.split(" ", 3);
 		String command = parts[0];
 		String argument = parts.length > 1 ? parts[1] : "";
+		String topic = parts.length > 2 ? parts[2] : "";
 
 		switch (CommandType.valueOf(command.toUpperCase())) {
 			case ADD_TOPIC -> addTopic(argument);
 			case REMOVE_TOPIC -> removeTopic(argument);
 			case SUBSCRIBE -> subscribeClientToTopic(clientChannel, argument);
 			case UNSUBSCRIBE -> unsubscribeClientFromTopic(clientChannel, argument);
-			case SEND_MESSAGE -> sendMessageToTopic(command, argument);
+			case SEND_MESSAGE -> sendMessageToTopic(topic, argument);
 			case REFRESH -> sendTopicList(clientChannel);
 			default -> System.out.println("Unknown command: " + command);
 		}
@@ -119,7 +121,7 @@ public class Server {
 	private void addTopic(String topic) {
 		if (!topics.contains(topic)) {
 			topics.add(topic);
-			topicSubscribers.put(topic, new HashSet<>());
+			subscribersByTopic.put(topic, new HashSet<>());
 			System.out.println("Added topic: " + topic);
 		} else {
 			System.out.println("Topic already exists: " + topic);
@@ -132,8 +134,8 @@ public class Server {
 			return;
 		}
 			topics.remove(topic);
-			topicSubscribers.remove(topic);
-			for (Set<String> subscriptions : clientSubscriptions.values()) {
+			subscribersByTopic.remove(topic);
+			for (Set<String> subscriptions : topicsSubscribedByClient.values()) {
 				subscriptions.remove(topic);
 			}
 			System.out.println("Removed topic: " + topic);
@@ -144,8 +146,8 @@ public class Server {
 			System.out.println("Topic does not exist: " + topic);
 			return;
 		}
-		topicSubscribers.get(topic).add(clientChannel);
-		clientSubscriptions.get(clientChannel).add(topic);
+		subscribersByTopic.get(topic).add(clientChannel);
+		topicsSubscribedByClient.get(clientChannel).add(topic);
 	}
 
 	private void unsubscribeClientFromTopic(SocketChannel clientChannel, String topic) {
@@ -153,9 +155,9 @@ public class Server {
 			System.out.println("Topic does not exist: " + topic);
 			return;
 		}
-		if (topics.contains(topic) && topicSubscribers.containsKey(topic)) {
-			topicSubscribers.get(topic).remove(clientChannel);
-			clientSubscriptions.get(clientChannel).remove(topic);
+		if (topics.contains(topic) && subscribersByTopic.containsKey(topic)) {
+			subscribersByTopic.get(topic).remove(clientChannel);
+			topicsSubscribedByClient.get(clientChannel).remove(topic);
 		}
 	}
 
@@ -171,11 +173,11 @@ public class Server {
 			System.out.println("Topic does not exist: " + topic);
 			return;
 		}
-		if (topicSubscribers.containsKey(topic)) {
+		if (subscribersByTopic.containsKey(topic)) {
 			ByteBuffer msgBuffer = ByteBuffer.wrap(message.getBytes());
-			for (SocketChannel subscriber : topicSubscribers.get(topic)) {
+			for (SocketChannel subscriber : subscribersByTopic.get(topic)) {
+				msgBuffer.rewind();
 				subscriber.write(msgBuffer);
-				msgBuffer.clear(); // Reset buffer for next write
 			}
 		}
 	}
