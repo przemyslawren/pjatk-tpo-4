@@ -1,18 +1,14 @@
 package admin;
 
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import javax.swing.*;
 import java.awt.*;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 
 public class AdminGUI extends JFrame {
     private JTextArea logArea;
     private JTextField topicField, messageField;
     private JButton addButton, removeButton, sendMessageButton;
-    private SocketChannel channel;
 
     public AdminGUI() {
         setTitle("Admin Interface");
@@ -24,8 +20,7 @@ public class AdminGUI extends JFrame {
         logArea.setEditable(false);
         add(new JScrollPane(logArea), BorderLayout.CENTER);
 
-        JPanel panel = new JPanel();
-        panel.setLayout(new GridLayout(5, 2));
+        JPanel panel = new JPanel(new GridLayout(5, 2));
         topicField = new JTextField();
         messageField = new JTextField();
         addButton = new JButton("Add Topic");
@@ -40,53 +35,27 @@ public class AdminGUI extends JFrame {
         panel.add(sendMessageButton);
         add(panel, BorderLayout.SOUTH);
 
-        addButton.addActionListener(e -> manageTopic("add", topicField.getText()));
-        removeButton.addActionListener(e -> manageTopic("remove", topicField.getText()));
-        sendMessageButton.addActionListener(e -> sendMessage(messageField.getText()));
-
-        try {
-            connectToServer();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Cannot connect to server", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-
         setVisible(true);
     }
 
-    private void connectToServer() throws IOException {
-        channel = SocketChannel.open();
-        channel.configureBlocking(false);
-        channel.connect(new InetSocketAddress("localhost", 12345));
-        while (!channel.finishConnect()) {
-            // Wait for connection to finish
-        }
-        logArea.append("Connected to server\n");
+    public void addTopicListener(BiConsumer<String, String> listener) {
+        addButton.addActionListener(e -> listener.accept("add", topicField.getText()));
+        removeButton.addActionListener(e -> listener.accept("remove", topicField.getText()));
     }
 
-    private void manageTopic(String command, String topic) {
-        if (topic.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Topic field cannot be empty", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        String fullCommand = command + " " + topic + "\n";
-        sendMessage(fullCommand);
-        topicField.setText("");
+    public void addMessageListener(Consumer<String> listener) {
+        sendMessageButton.addActionListener(e -> listener.accept(messageField.getText()));
     }
 
-    private void sendMessage(String msg) {
-        try {
-            ByteBuffer buffer = ByteBuffer.wrap(msg.getBytes(StandardCharsets.UTF_8));
-            while (buffer.hasRemaining()) {
-                channel.write(buffer);
-            }
-            logArea.append("Command sent: " + msg + "\n");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public void showConnected() {
+        JOptionPane.showMessageDialog(this, "Connected to server!", "Connection Successful", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(AdminGUI::new);
+    public void updateLog(String message) {
+        logArea.append(message + "\n");
+    }
+
+    public void showError(String message) {
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
