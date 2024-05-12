@@ -18,18 +18,26 @@ public class AdminModel {
     }
 
     public void connect() throws IOException {
-        channel = SocketChannel.open();
-        channel.configureBlocking(false);
-        channel.connect(new InetSocketAddress(serverAddress, serverPort));
-        while (!channel.finishConnect()) {
-            // Wait for connection to complete
+        try {
+            channel = SocketChannel.open();
+            channel.configureBlocking(false);
+            channel.connect(new InetSocketAddress(serverAddress, serverPort));
+            while (!channel.finishConnect()) {
+                // Wait for connection to complete
+            }
+        }catch (IOException e) {
+            throw new IOException("Failed to connect to server", e);
         }
     }
 
     public void sendCommand(String command) throws IOException {
-        ByteBuffer buffer = ByteBuffer.wrap((command + "\n").getBytes(StandardCharsets.UTF_8));
-        while (buffer.hasRemaining()) {
-            channel.write(buffer);
+        try {
+            ByteBuffer buffer = ByteBuffer.wrap((command + "\n").getBytes(StandardCharsets.UTF_8));
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
+        } catch (IOException e) {
+            throw new IOException("Failed to send command", e);
         }
     }
 

@@ -9,8 +9,8 @@ public class AdminController {
     public AdminController(AdminModel model, AdminGUI view) {
         this.model = model;
         this.view = view;
-        view.addTopicListener(this::manageTopic);
-        view.addMessageListener(this::sendMessage);
+        view.addTopicListener(this::sendCommand);
+        view.addMessageListener(this::sendCommand);
     }
 
     public void connect() {
@@ -22,21 +22,12 @@ public class AdminController {
         }
     }
 
-    private void manageTopic(String command, String topic) {
+    private void sendCommand(String... args) {
         try {
-            model.sendCommand(command + " " + topic);
-            view.updateLog(command + ": " + topic);
+            model.sendCommand(String.join(" ", args));
+            view.updateLog(String.join(": ", args));
         } catch (IOException e) {
-            view.showError("Error sending topic command: " + e.getMessage());
-        }
-    }
-
-    private void sendMessage(String command, String topic, String message) {
-        try {
-            model.sendCommand(command + " " + topic + " " + message);
-            view.updateLog(command + ": " + topic + " topic: " + message);
-        } catch (IOException e) {
-            view.showError("Error sending message: " + e.getMessage());
+            view.showError("Error sending command: " + e.getMessage());
         }
     }
 }

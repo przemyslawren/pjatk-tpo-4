@@ -61,7 +61,8 @@ public class Server {
 
 					if (key.isAcceptable()) {
 						handleAccept();
-					} else if (key.isReadable()) {
+					}
+					if (key.isReadable()) {
 						handleRead(key);
 					}
 				}
@@ -79,7 +80,7 @@ public class Server {
 		SocketChannel clientChannel = serverSocketChannel.accept();
 		if (clientChannel != null) {
 			clientChannel.configureBlocking(false);
-			clientChannel.register(selector, SelectionKey.OP_READ);
+			clientChannel.register(selector, SelectionKey.OP_READ, SelectionKey.OP_WRITE);
 			topicsSubscribedByClient.put(clientChannel, new HashSet<>());
 			System.out.println("Accepted connection from " + clientChannel.getRemoteAddress());
 		}
@@ -106,6 +107,8 @@ public class Server {
 		String command = parts[0];
 		String argument = parts.length > 1 ? parts[1] : "";
 		String topic = parts.length > 2 ? parts[2] : "";
+
+		System.out.println("Command: " + command);
 
 		switch (CommandType.valueOf(command.toUpperCase())) {
 			case ADD_TOPIC -> addTopic(argument);
@@ -162,6 +165,8 @@ public class Server {
 	}
 
 	private void sendTopicList(SocketChannel clientChannel) throws IOException {
+		String topicsString = String.join(",", topics);
+		System.out.println("Sending topics: " + topicsString + " list to " + clientChannel.getRemoteAddress());
 		String topicsList = String.join(",", topics);
 		ByteBuffer buffer = ByteBuffer.wrap(topicsList.getBytes());
 		clientChannel.write(buffer);
